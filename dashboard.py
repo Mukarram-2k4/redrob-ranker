@@ -229,15 +229,15 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     benchmark_stages = [
-        ("Bootstrap", "0.05s", 0.05),
-        ("Ingestion", "17.5s", 17.5),
-        ("Early Elimination", "1.2s", 1.2),
-        ("Behavioral Features", "0.2s", 0.2),
-        ("Tabular Features", "0.9s", 0.9),
-        ("Semantic NLP", "20.7s", 20.7),
-        ("Honeypot Detection", "0.3s", 0.3),
-        ("Scoring", "0.1s", 0.1),
-        ("Output", "0.1s", 0.1),
+        ("Bootstrap", "0.03s", 0.03),
+        ("Ingestion", "10.5s", 10.46),
+        ("Early Elimination", "0.8s", 0.84),
+        ("Behavioral Features", "0.1s", 0.13),
+        ("Tabular Features", "0.6s", 0.57),
+        ("Semantic NLP", "14.3s", 14.26),
+        ("Honeypot Detection", "0.2s", 0.19),
+        ("Scoring", "0.1s", 0.09),
+        ("Output", "0.04s", 0.04),
     ]
     total_bench = sum(t for _, _, t in benchmark_stages)
     for name, t_str, t_val in benchmark_stages:
@@ -449,7 +449,7 @@ with tab1:
     with info_col:
         st.markdown("""
         <div style="background:rgba(102,126,234,0.1); border:1px solid rgba(102,126,234,0.3); border-radius:8px; padding:0.8rem 1rem; font-size:0.9rem">
-            🕐 <strong>Demo: ~1-2s</strong> · <strong>Full 100K: ~41s</strong> on CPU<br>
+            🕐 <strong>Demo: ~1-2s</strong> · <strong>Full 100K: ~27s</strong> on CPU<br>
             <span style="color:#888">No GPU, no API calls, no network access</span>
         </div>
         """, unsafe_allow_html=True)
@@ -600,7 +600,7 @@ with tab2:
                 st.markdown(f"""
                 <div style="text-align:center; margin-top:0.5rem; color:#888; font-size:0.85rem">
                     Demo total: <strong style="color:#43e97b">{total_t:.2f}s</strong> ·
-                    100K benchmark: <strong style="color:#667eea">~41s</strong> /
+                    100K benchmark: <strong style="color:#667eea">~27s</strong> /
                     <span>300s budget</span>
                 </div>
                 """, unsafe_allow_html=True)
@@ -1090,7 +1090,7 @@ Our multi-layered defense:
 
 | Constraint | Limit | Actual |
 |-----------|-------|--------|
-| Runtime | ≤ 5 min | ~41s ✅ |
+| Runtime | ≤ 5 min | ~27s ✅ |
 | Memory | ≤ 16 GB | ~2-3 GB ✅ |
 | Compute | CPU only | Pure Python ✅ |
 | Network | None | No API calls ✅ |
