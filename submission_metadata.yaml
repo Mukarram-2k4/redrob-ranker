@@ -12,9 +12,9 @@ primary_contact:
   phone: "+91-7842771037"
 
 team_members:
-  - name: "Syed Khaja Mukarram Ajaz"
-    email: "mukarramajaz01@gmail.com"
-    role: "ML Engineer"
+   name: "Syed Khaja Mukarram Ajaz"
+   email: "mukarramajaz01@gmail.com"
+   role: "Associate Software Engineer"
 
 # ============================================================================
 # Code and reproducibility
@@ -43,8 +43,8 @@ compute:
 # AI tools declaration
 # ============================================================================
 ai_tools_used:
-  - "Claude"    # Used for architecture discussion, code review, pair programming
-  - "Gemini"    # Used via Antigravity coding assistant
+   "Claude" #Used for architecture discussion, code review, pair programming
+   "Gemini" #Used via Antigravity coding assistant"
 
 ai_usage_summary: |
   Used Claude (via Antigravity) as a pair-programming assistant for architecture
@@ -71,7 +71,7 @@ methodology_summary: |
 
   Key insight: the JD explicitly warns against ranking by AI keyword count.
   Our title_relevance multiplier (0.25× for non-ML titles) and temporal decay
-  on career NLP directly address this. Runtime: ~41s for 100K candidates on CPU.
+  on career NLP directly address this. Runtime: ~23.71s for 100K candidates on CPU.
 
 # ============================================================================
 # Declarations
