@@ -1,0 +1,84 @@
+# Redrob Hackathon — Submission Metadata
+# Team: ForgeScaler
+
+# ============================================================================
+# Team identity
+# ============================================================================
+team_name: "ForgeScaler"
+
+primary_contact:
+  name: "Syed Khaja Mukarram Ajaz"
+  email: "mukarramajaz01@gmail.com"
+  phone: "+91-7842771037"
+
+team_members:
+  - name: "Syed Khaja Mukarram Ajaz"
+    email: "mukarramajaz01@gmail.com"
+    role: "ML Engineer"
+
+# ============================================================================
+# Code and reproducibility
+# ============================================================================
+github_repo: "https://github.com/Mukarram-2k4/redrob-ranker"
+
+sandbox_link: "https://share.streamlit.io/Mukarram-2k4/redrob-ranker/main/dashboard.py"
+
+reproduce_command: "python rank.py --candidates ./candidates.jsonl --out ./submission.csv"
+
+# ============================================================================
+# Compute environment
+# ============================================================================
+compute:
+  platform: "Windows 11"
+  cpu_cores: 8
+  ram_gb: 16
+  python_version: "3.11"
+  os: "Windows 11"
+  uses_gpu_for_inference: false
+  has_network_during_ranking: false
+  pre_computation_required: false
+  pre_computation_time_minutes: 0
+
+# ============================================================================
+# AI tools declaration
+# ============================================================================
+ai_tools_used:
+  - "Claude"    # Used for architecture discussion, code review, pair programming
+  - "Gemini"    # Used via Antigravity coding assistant
+
+ai_usage_summary: |
+  Used Claude (via Antigravity) as a pair-programming assistant for architecture
+  design, code review, and debugging. No candidate profile data was fed to any
+  LLM. The scoring logic, skill taxonomy, NLP phrase lists, honeypot rules, and
+  all algorithmic design decisions were engineered by the team. AI tools were
+  used as a productivity multiplier, not as the ranking system itself.
+
+# ============================================================================
+# Approach summary (≤200 words)
+# ============================================================================
+methodology_summary: |
+  Rule-based + feature-weighted ranking engine. No LLMs, no GPU, no embeddings.
+
+  Eight-stage pipeline: (1) Aho-Corasick automaton compiled from 80+ production
+  NLP phrases, (2) stream-parse 100K JSONL candidates, (3) early eliminate ~69K
+  low-quality/honeypot candidates, (4) compute 12 features across three groups:
+  behavioral (availability, engagement, credibility), tabular (experience fit,
+  company type, location, title relevance), and semantic (career NLP with
+  temporal decay, skill depth with tier weights, domain classification),
+  (5) honeypot full-pass on survivors, (6) composite scoring with title-relevance
+  multiplier to penalize keyword-stuffers, (7) select top 100 with guardrails,
+  (8) generate per-candidate reasoning from actual profile data.
+
+  Key insight: the JD explicitly warns against ranking by AI keyword count.
+  Our title_relevance multiplier (0.25× for non-ML titles) and temporal decay
+  on career NLP directly address this. Runtime: ~41s for 100K candidates on CPU.
+
+# ============================================================================
+# Declarations
+# ============================================================================
+declarations:
+  read_submission_spec: true
+  code_is_original_work: true
+  no_collusion: true
+  honeypot_check_done: true
+  reproduction_tested: true

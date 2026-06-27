@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Project-specific exclusions
+.agents/
+_tmp_*
+_audit_sample.py
+
+# Large data files (the 100K dataset is NOT in the repo)
+candidates.jsonl
+
+# Internal dev notes (not for submission repo)
+PROJECT.md
+ORIGINAL_REQUEST.md
+TEST_INFRA.md
+TEST_READY.md
+progress.md
+generate_demo_data.py
