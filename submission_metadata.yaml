@@ -71,7 +71,7 @@ methodology_summary: |
 
   Key insight: the JD explicitly warns against ranking by AI keyword count.
   Our title_relevance multiplier (0.25× for non-ML titles) and temporal decay
-  on career NLP directly address this. Runtime: ~41s for 100K candidates on CPU.
+  on career NLP directly address this. Runtime: ~27s for 100K candidates on CPU.
 
 # ============================================================================
 # Declarations

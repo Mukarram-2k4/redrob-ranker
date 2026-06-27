@@ -2,7 +2,7 @@
 
 **Team ForgeScaler** — India Runs Data & AI Challenge
 
-A high-performance, rule-based + feature-weighted candidate ranking system that ranks the top 100 candidates from a 100K-candidate pool for a Senior AI Engineer role. Runs in ~41 seconds on CPU with no GPU or network access.
+A high-performance, rule-based + feature-weighted candidate ranking system that ranks the top 100 candidates from a 100K-candidate pool for a Senior AI Engineer role. Runs in ~27 seconds on CPU with no GPU or network access.
 
 ## Reproduce Command
 
@@ -155,25 +155,25 @@ The system is entirely rule-based + feature-weighted, running on pure Python wit
 ## Performance
 
 ```
-Stage 0: Bootstrap               0.05s
-Stage 1: Ingestion              17.49s  ████████████
-Stage 2: Early Elimination       1.24s
-Stage 3a: Behavioral Features    0.23s
-Stage 3b: Tabular Features       0.90s
-Stage 3c: Semantic Features     20.65s  ███████████████
-Stage 4: Honeypot Full Pass      0.33s
-Stage 5: Scoring                 0.08s
-Stage 6: Top-100 + Guardrails    0.07s
+Stage 0: Bootstrap               0.03s
+Stage 1: Ingestion              10.46s  ███████████
+Stage 2: Early Elimination       0.84s
+Stage 3a: Behavioral Features    0.13s
+Stage 3b: Tabular Features       0.57s
+Stage 3c: Semantic Features     14.26s  ████████████████
+Stage 4: Honeypot Full Pass      0.19s
+Stage 5: Scoring                 0.09s
+Stage 6: Top-100 + Guardrails    0.04s
 Stage 7: Output                  0.00s
 ─────────────────────────────────────
-TOTAL                           41.03s  (budget: 300s)
+TOTAL                           26.62s  (budget: 300s)
 ```
 
 ## Compute Constraints Compliance
 
 | Constraint | Limit | Actual |
 |-----------|-------|--------|
-| Runtime | ≤ 5 min | ~41s ✅ |
+| Runtime | ≤ 5 min | ~27s ✅ |
 | Memory | ≤ 16 GB | ~2-3 GB ✅ |
 | Compute | CPU only | Pure Python ✅ |
 | Network | None | No API calls ✅ |
