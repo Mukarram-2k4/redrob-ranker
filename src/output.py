@@ -23,8 +23,9 @@ def select_top_100(survivors: list[Candidate]) -> list[Candidate]:
     If honeypot rate > 8% in top 100, replace flagged with next-best clean.
     Assign ranks 1-100.
     """
+    valid_survivors = [c for c in survivors if not c.hard_disqualify and c.final_score >= 0]
     sorted_all = sorted(
-        survivors,
+        valid_survivors,
         key=lambda c: (
             -c.final_score,
             -c.signals.search_appearance_30d,
@@ -86,6 +87,8 @@ def _generate_reasoning(cand: Candidate, rank: int) -> str:
     """
     parts = []
 
+    # ── Dimension ranks prefix (Disabled debug ranks prefix in reasoning) ──
+
     # ── Title and experience ──
     title = cand.current_title or cand.headline or "professional"
     yoe = cand.years_of_experience
@@ -131,9 +134,9 @@ def _generate_reasoning(cand: Candidate, rank: int) -> str:
 
     # ── Company quality ──
     comp_score = cand.features.get("company_type_score", 0.0)
-    if comp_score >= 2.0:
+    if comp_score >= 0.5:
         parts.append("product company background")
-    elif comp_score <= 0.5 and rank > 30:
+    elif comp_score <= 0.35 and rank > 30:
         parts.append("primarily services-company experience")
 
     # ── Behavioral signals ──
@@ -195,7 +198,9 @@ def _generate_reasoning(cand: Candidate, rank: int) -> str:
         parts.append("profile contains inconsistencies that may affect reliability")
 
     # ── Combine ──
-    reasoning = "; ".join(parts) + "."
+    reasoning = "; ".join(parts) + f". (Ref: {cand.candidate_id})"
+    if reasoning:
+        reasoning = reasoning[0].upper() + reasoning[1:]
     return reasoning
 
 
@@ -231,17 +236,23 @@ def write_submission_csv(top_100: list[Candidate], output_path: str) -> None:
 
     display_scores = []
     for i, c in enumerate(top_100):
-        # Compute raw ratio
-        raw_ratio = max(0.0, min(1.0, c.final_score / max_score)) if c.final_score > 0 else 0.0
-
-        if i == 0:
-            # Rank 1 always gets 1.0000
-            display = 1.0
+        if c.final_score < 0:
+            display = -1.0
         else:
-            # Ensure strictly less than previous score by at least 0.0001
-            prev = display_scores[-1]
-            display = min(prev - 0.0001, raw_ratio)
-            display = max(0.0001, display)  # floor to prevent negatives
+            # Compute raw ratio
+            raw_ratio = max(0.0, min(1.0, c.final_score / max_score)) if c.final_score > 0 else 0.0
+
+            if i == 0:
+                # Rank 1 always gets 1.0000
+                display = 1.0
+            else:
+                # Ensure strictly less than previous score by at least 0.0001
+                prev = display_scores[-1]
+                if prev < 0:
+                    display = 0.0
+                else:
+                    display = min(prev - 0.0001, raw_ratio)
+                    display = max(0.0001, display)  # floor to prevent negatives
 
         display_scores.append(round(display, 4))
 

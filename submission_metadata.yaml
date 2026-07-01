@@ -57,21 +57,20 @@ ai_usage_summary: |
 # Approach summary (≤200 words)
 # ============================================================================
 methodology_summary: |
-  Rule-based + feature-weighted ranking engine. No LLMs, no GPU, no embeddings.
+  Hybrid semantic retrieval and Reciprocal Rank Fusion (RRF) candidate ranker.
 
-  Eight-stage pipeline: (1) Aho-Corasick automaton compiled from 80+ production
-  NLP phrases, (2) stream-parse 100K JSONL candidates, (3) early eliminate ~69K
-  low-quality/honeypot candidates, (4) compute 12 features across three groups:
-  behavioral (availability, engagement, credibility), tabular (experience fit,
-  company type, location, title relevance), and semantic (career NLP with
-  temporal decay, skill depth with tier weights, domain classification),
-  (5) honeypot full-pass on survivors, (6) composite scoring with title-relevance
-  multiplier to penalize keyword-stuffers, (7) select top 100 with guardrails,
-  (8) generate per-candidate reasoning from actual profile data.
+  Five-dimension RRF pipeline: fuses independent ranks across: (1) Technical
+  score (Aho-Corasick NLP scanning + experience + domain alignment), (2) Career
+  Trajectory (title relevance + pedigree + location + education), (3) Behavioral
+  score (engagement + credibility), (4) Trust score (inverse honeypot rules),
+  and (5) Semantic similarity (local TF-IDF vector space model with cosine
+  similarity on JD vs candidates).
 
-  Key insight: the JD explicitly warns against ranking by AI keyword count.
-  Our title_relevance multiplier (0.25× for non-ML titles) and temporal decay
-  on career NLP directly address this. Runtime: ~27s for 100K candidates on CPU.
+  Honeypot-aware ranking: checks 14 honeypot indicators (salary inversion, Young
+  Career High YOE, overlapping/impossible tenures, inactive profiles, fixture
+  names, tech time-travel, empty expertise). If honeypot density >8% in top 100,
+  swaps flagged candidates with next-best clean survivors. Offline execution:
+  ~58s runtime on CPU, no network/API calls, no GPU required. Passed 115 E2E tests.
 
 # ============================================================================
 # Declarations

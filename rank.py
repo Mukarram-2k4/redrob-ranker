@@ -32,7 +32,7 @@ class StageTimer:
     def start(self, name: str):
         self._current_name = name
         self._start = time.perf_counter()
-        print(f"  ▸ {name}...", end="", flush=True)
+        print(f"  > {name}...", end="", flush=True)
 
     def stop(self):
         elapsed = time.perf_counter() - self._start
@@ -41,16 +41,16 @@ class StageTimer:
 
     def summary(self):
         total = sum(t for _, t in self.stages)
-        print(f"\n{'─' * 50}")
+        print(f"\n{'-' * 50}")
         print(f"  STAGE TIMING SUMMARY")
-        print(f"{'─' * 50}")
+        print(f"{'-' * 50}")
         for name, elapsed in self.stages:
-            bar = "█" * int(elapsed / total * 30) if total > 0 else ""
+            bar = "#" * int(elapsed / total * 30) if total > 0 else ""
             print(f"  {name:<30s} {elapsed:6.2f}s  {bar}")
-        print(f"{'─' * 50}")
+        print(f"{'-' * 50}")
         print(f"  {'TOTAL':<30s} {total:6.2f}s")
         print(f"  {'Budget remaining':<30s} {300 - total:6.2f}s")
-        print(f"{'─' * 50}")
+        print(f"{'-' * 50}")
 
 
 def main():
@@ -109,35 +109,35 @@ def main():
     timer = StageTimer()
     pipeline_start = time.perf_counter()
 
-    print(f"\n{'═' * 50}")
+    print(f"\n{'=' * 50}")
     print(f"  REDROB AI CANDIDATE RANKING ENGINE")
-    print(f"{'═' * 50}")
+    print(f"{'=' * 50}")
     print(f"  Input:   {candidates_path}")
     print(f"  Output:  {out_path}")
     print(f"  Workers: {n_workers}")
-    print(f"{'═' * 50}\n")
+    print(f"{'=' * 50}\n")
 
-    # ── Stage 0: Bootstrap ──────────────────────────────────────────────
+    # -- Stage 0: Bootstrap ──────────────────────────────────────────────
     timer.start("Stage 0: Bootstrap")
     from src.ingest import build_lookups
     lookups = build_lookups()
     timer.stop()
 
-    # ── Stage 1: Ingestion ──────────────────────────────────────────────
+    # -- Stage 1: Ingestion ──────────────────────────────────────────────
     timer.start("Stage 1: Ingestion")
     from src.ingest import load_candidates
     candidates = load_candidates(str(candidates_path))
     print(f"    Loaded {len(candidates)} candidates", end="")
     timer.stop()
 
-    # ── Stage 2: Early Elimination ──────────────────────────────────────
+    # -- Stage 2: Early Elimination ──────────────────────────────────────
     timer.start("Stage 2: Early Elimination")
     from src.filters import early_eliminate
     survivors, eliminated = early_eliminate(candidates, lookups)
     print(f"    {len(survivors)} survivors, {len(eliminated)} eliminated", end="")
     timer.stop()
 
-    # ── Stage 3: Feature Extraction ─────────────────────────────────────
+    # -- Stage 3: Feature Extraction ─────────────────────────────────────
     timer.start("Stage 3a: Behavioral Features")
     from src.features import compute_behavioral_features
     compute_behavioral_features(survivors)
@@ -153,7 +153,12 @@ def main():
     compute_semantic_features(survivors, lookups, n_workers=n_workers)
     timer.stop()
 
-    # ── Stage 4: Honeypot Full Pass ─────────────────────────────────────
+    timer.start("Stage 3d: TF-IDF Semantic Layer")
+    from src.semantic import compute_tfidf_scores
+    tfidf_scores = compute_tfidf_scores(survivors)
+    timer.stop()
+
+    # -- Stage 4: Honeypot Full Pass ─────────────────────────────────────
     timer.start("Stage 4: Honeypot Full Pass")
     from src.filters import honeypot_full_pass
     honeypot_full_pass(survivors)
@@ -161,33 +166,33 @@ def main():
     print(f"    {flagged} honeypots flagged", end="")
     timer.stop()
 
-    # ── Stage 5: Scoring ────────────────────────────────────────────────
+    # -- Stage 5: Scoring ────────────────────────────────────────────────
     timer.start("Stage 5: Scoring")
     from src.scorer import compute_scores
-    compute_scores(survivors)
+    compute_scores(survivors, tfidf_scores)
     timer.stop()
 
-    # ── Stage 6: Top-100 Selection + Guardrails ─────────────────────────
+    # -- Stage 6: Top-100 Selection + Guardrails ─────────────────────────
     timer.start("Stage 6: Top-100 + Guardrails")
     from src.output import select_top_100
     top_100 = select_top_100(survivors)
     timer.stop()
 
-    # ── Stage 7: Reasoning + CSV ────────────────────────────────────────
+    # -- Stage 7: Reasoning + CSV ────────────────────────────────────────
     timer.start("Stage 7: Output")
     from src.output import write_submission_csv
     write_submission_csv(top_100, str(out_path))
     timer.stop()
 
-    # ── Summary ─────────────────────────────────────────────────────────
+    # -- Summary ─────────────────────────────────────────────────────────
     total_time = time.perf_counter() - pipeline_start
-    print(f"\n  ✓ Submission written to: {out_path}")
-    print(f"  ✓ Total runtime: {total_time:.2f}s")
+    print(f"\n  [OK] Submission written to: {out_path}")
+    print(f"  [OK] Total runtime: {total_time:.2f}s")
 
     if total_time > 300:
-        print(f"  ⚠ WARNING: Exceeded 5-minute budget!")
+        print(f"  [WARN] WARNING: Exceeded 5-minute budget!")
     else:
-        print(f"  ✓ Within 5-minute budget ({300 - total_time:.0f}s remaining)")
+        print(f"  [OK] Within 5-minute budget ({300 - total_time:.0f}s remaining)")
 
     if args.profile:
         timer.summary()

@@ -624,7 +624,13 @@ HONEYPOT_RULES = {
     "HP08_ALL_ASSESSMENTS_PERF":  0.50,
     "HP09_INSTANT_RESPONSE":      0.40,
     "HP10_FIXTURE_COMPANY":       0.10,
+    "HP11_TECH_TIME_TRAVEL":      0.90,
+    "HP12_EMPTY_EXPERTISE":       0.90,
+    "HP14_SKILL_ADJACENCY":       0.15,
 }
+
+# HP13 is a behavioral penalty, not a honeypot confidence — stored separately
+HP13_ARCHITECTURE_ASTRONAUT_PENALTY = 0.35
 
 # Fixture company names (honeypot markers)
 FIXTURE_COMPANIES = {
@@ -647,6 +653,81 @@ HP09_RESPONSE_TIME_THRESHOLD = 0.1      # hours
 
 # HP-03 overlap threshold
 HP03_OVERLAP_DAYS = 90
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SYNONYM EXPANSION — O(1) "semantic" matching before Aho-Corasick/TF-IDF
+# ═══════════════════════════════════════════════════════════════════════════
+# Sorted by length descending at runtime for longest-match-first replacement.
+SYNONYM_MAP = {
+    "released to production": "deployed",
+    "put into production": "deployed",
+    "pushed to prod": "deployed",
+    "went live": "deployed",
+    "shipped": "deployed",
+    "launched": "deployed",
+    "aws instances": "cloud deployment",
+    "gcp instances": "cloud deployment",
+    "azure instances": "cloud deployment",
+    "large language model": "llm",
+    "large language models": "llm",
+    "genai": "generative ai",
+    "gen ai": "generative ai",
+    "dl": "deep learning",
+    "ir": "information retrieval",
+    "recsys": "recommendation systems",
+    "rec sys": "recommendation systems",
+    "recommender system": "recommendation systems",
+}
+
+# Pre-sort by length descending for longest-match-first replacement
+_SYNONYM_PAIRS = sorted(SYNONYM_MAP.items(), key=lambda x: len(x[0]), reverse=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TECHNOLOGY RELEASE YEARS — for HP11 Time-Travel Fraud Detection
+# ═══════════════════════════════════════════════════════════════════════════
+TECH_RELEASE_YEARS = {
+    "llama": 2023, "llama 2": 2023, "llama2": 2023,
+    "llama 3": 2024, "llama3": 2024,
+    "mistral": 2023, "mixtral": 2023,
+    "gemini": 2023, "gpt 4": 2023, "gpt4": 2023,
+    "chatgpt": 2022, "stable diffusion": 2022,
+    "qlora": 2023, "peft": 2022,
+    "langchain": 2022, "llamaindex": 2022,
+    "claude": 2023, "anthropic": 2023,
+    "crew ai": 2024, "crewai": 2024,
+    "autogen": 2023, "dspy": 2023,
+    "bge": 2023,
+}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SKILL ADJACENCY GRAPH — for HP14 Corroboration Check
+# ═══════════════════════════════════════════════════════════════════════════
+SKILL_ADJACENCY = {
+    "faiss":       {"vector search", "embeddings", "pytorch", "ann", "similarity search", "numpy"},
+    "pinecone":    {"vector search", "embeddings", "vector database", "retrieval", "dense retrieval"},
+    "weaviate":    {"vector search", "embeddings", "semantic search", "vector database"},
+    "qdrant":      {"vector search", "embeddings", "similarity search", "vector database"},
+    "milvus":      {"vector search", "embeddings", "ann", "vector database"},
+    "sentence-transformers": {"embeddings", "pytorch", "transformers", "bert", "huggingface"},
+    "sentence transformers": {"embeddings", "pytorch", "transformers", "bert", "huggingface"},
+    "colbert":     {"retrieval", "ranking", "embeddings", "reranking", "information retrieval"},
+    "ndcg":        {"ranking", "information retrieval", "mrr", "learning to rank"},
+}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SOURCE WEIGHTS — for source-aware NLP evidence weighting
+# ═══════════════════════════════════════════════════════════════════════════
+SOURCE_WEIGHTS = {
+    "career_descriptions": 1.00,   # Strongest proof — they describe what they built
+    "current_title":       0.85,   # Important but not sufficient
+    "headline":            0.45,   # Helpful, self-written
+    "summary":             0.45,   # Same
+    "skill_names":         0.25,   # Weakest — just labels, not evidence
+}
 
 
 # ═══════════════════════════════════════════════════════════════════════════

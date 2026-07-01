@@ -2,7 +2,7 @@
 
 **Team ForgeScaler** — India Runs Data & AI Challenge
 
-A high-performance, rule-based + feature-weighted candidate ranking system that ranks the top 100 candidates from a 100K-candidate pool for a Senior AI Engineer role. Runs in ~27 seconds on CPU with no GPU or network access.
+A high-performance, hybrid semantic retrieval and Reciprocal Rank Fusion (RRF) candidate ranking system that ranks the top 100 candidates from a 100K-candidate pool for a Senior AI Engineer role. Runs in ~58 seconds on CPU with no GPU or network access.
 
 ## Reproduce Command
 
@@ -59,84 +59,81 @@ The demo dataset (`demo_candidates.jsonl`) contains real top-ranked candidates e
 
 **Live Sandbox**: [Streamlit Cloud](https://share.streamlit.io/Mukarram-2k4/redrob-ranker/main/dashboard.py)
 
-## Architecture
-
-The pipeline runs 8 stages in sequence:
+The pipeline runs 9 stages in sequence:
 
 ```
 candidates.jsonl (100K profiles, ~465 MB)
         │
-        ▼ Stage 0: Bootstrap (0.05s)
+        ▼ Stage 0: Bootstrap (0.03s)
    Compile Aho-Corasick automaton from 80+ production/research NLP phrases
    (falls back to compiled regex if pyahocorasick unavailable)
 
-        ▼ Stage 1: Ingestion (17s)
+        ▼ Stage 1: Ingestion (10.00s)
    Stream-parse JSONL line-by-line → 100,000 typed Candidate dataclasses
    Coerces types, handles malformed records gracefully
 
-        ▼ Stage 2: Early Elimination (1s)
+        ▼ Stage 2: Early Elimination (0.75s)
    Filters candidates with: YOE < 2, zero tech skills, or honeypot
    confidence ≥ 0.6 from HP01 (salary inversion), HP02 (YOE vs career span),
    HP05 (young career / high YOE), HP06 (impossible tenure)
    → 30,927 survivors (69,073 eliminated)
 
-        ▼ Stage 3a: Behavioral Features (0.2s)
+        ▼ Stage 3a: Behavioral Features (0.13s)
    Availability: recency, notice period, open-to-work, relocation, work mode
    Engagement: response rate, interview completion, response time, applications
    Credibility: GitHub activity, assessments, profile completeness, verification
 
-        ▼ Stage 3b: Tabular Features (0.9s)
+        ▼ Stage 3b: Tabular Features (0.53s)
    Experience fit (5-9yr sweet spot), company type (product vs services),
    location (Pune/Noida preferred), title relevance (ML/NLP titles vs non-ML),
    education tier bonus, title-chaser penalty
 
-        ▼ Stage 3c: Semantic Features (21s)
+        ▼ Stage 3c: Semantic Features (21.76s)
    Career NLP: Aho-Corasick scan for production phrases with temporal decay
    Skill depth: tier-weighted × proficiency × anti-stuffing penalty
    Domain: NLP_IR / GENERAL_ML / CV / SPEECH / DATA_ENG / NOT_TECH
 
-        ▼ Stage 4: Honeypot Full Pass (0.3s)
+        ▼ Stage 3d: TF-IDF Semantic Layer (19.68s)
+   Build TF-IDF Vectorizer of Job Description and Candidate career details
+   Compute local Cosine Similarity scores for plain-language matches
+
+        ▼ Stage 4: Honeypot Full Pass (4.52s)
    HP03 (overlapping tenures), HP04 (edu vs career start),
    HP07 (perfect + abandoned), HP08 (all assessments perfect),
-   HP09 (instant response), HP10 (fixture company names)
+   HP09 (instant response), HP10 (fixture company names),
+   HP11 (tech time-travel), HP12 (empty expertise),
+   HP14 (skill adjacency corroboration)
 
-        ▼ Stage 5: Scoring (0.1s)
-   final_score = technical_score × title_relevance × behavioral_multiplier
-                 + edu_bonus + micro_bonuses (salary, engagement, completeness)
+        ▼ Stage 5: Scoring (0.55s)
+   Map sub-scores to standard 1-based ranks.
+   Fuse RRF ranks across 5 dimensions: Technical, Trajectory, Behavioral, Trust, and Semantic.
+   Apply post-RRF trust multipliers, title-chaser, and architecture astronaut (HP13) penalties.
 
-        ▼ Stage 6: Top-100 Selection (0.1s)
-   Sort by score → search_appearance_30d → saved_by_recruiters_30d → candidate_id
-   Honeypot guardrail: if rate > 8%, replace with next-best clean candidates
+        ▼ Stage 6: Top-100 Selection (0.04s)
+   Sort by fused RRF score → search_appearance_30d → saved_by_recruiters_30d → candidate_id
+   Honeypot guardrail: if rate > 8% in top 100, swap excess honeypots with next-best clean survivors.
 
-        ▼ Stage 7: Output (0.01s)
+        ▼ Stage 7: Output (0.00s)
    Per-candidate reasoning referencing specific profile facts
    Score normalization with guaranteed unique scores per rank
    Tie-break by candidate_id ascending
 ```
 
-### Scoring Formula
+### Reciprocal Rank Fusion (RRF) scoring model
+
+Fuses 5 distinct dimensions of candidate quality using Reciprocal Rank Fusion (RRF):
+1. **Dimension 1: Technical Score** (Career NLP scan, skill depth, domain score, YOE fit, company type, recency, platform credibility)
+2. **Dimension 2: Career Trajectory** (Title seniority alignment + pedigree + location + education)
+3. **Dimension 3: Behavioral Score** (Availability, engagement, and platform credibility)
+4. **Dimension 4: Trust Score** (Inversion of active honeypot rules confidence score)
+5. **Dimension 5: Semantic TF-IDF Similarity Score** (Cosine similarity mapping of candidate profile details against the JD)
 
 ```
-technical_score = (
-    0.35 × career_nlp_score      # Production evidence in career text
-  + 0.15 × skill_depth_score     # Tier-weighted skills (Tier A=3.0 … Tier E=0.5, NEG=-2.0)
-  + 0.10 × domain_score          # NLP/IR alignment
-  + 0.08 × exp_fit_score         # 5-9 year sweet spot
-  + 0.12 × company_type_score    # Product vs services background
-  + 0.05 × location_score        # Pune/Noida proximity
-  + 0.07 × recency_score         # Platform activity
-  + 0.05 × platform_cred_score   # GitHub, assessments, verifications
-)
-
-final_score = technical_score
-            × (1 - title_chaser_penalty)   # ≥3 short stints penalty
-            × title_relevance              # Non-ML titles scored 0.25×
-            × behavioral_multiplier        # 0.35–1.15× based on signals
-            + edu_bonus                    # Tier-1 institution bonus
-            + salary_alignment_bonus       # 15-40 LPA sweet spot
-            + engagement_recency_bonus     # Platform activity signal
-            + profile_completeness_bonus   # Completeness micro-bonus
+RRF_score(d) = Σ_i  w_i / (60 + rank_i(d))
 ```
+Where weights are `w = [1.6, 1.2, 0.8, 0.8, 1.0]`.
+
+Post-RRF, we apply multiplicative penalties for title-chasing, architecture astronauts (HP13), and trust multipliers, then add micro-bonuses (salary alignment, engagement, completeness) for fine-grained tie breaking.
 
 ### Key Design Decisions
 
@@ -149,31 +146,32 @@ A production ML deployment from 2019 is weaker evidence than the same from 2024.
 **Why ~69K eliminated in Stage 2?**
 The synthetic dataset has high base rates of HP01 (salary inversion) and HP06 (impossible tenure) signals. Our 0.6 confidence threshold is intentionally conservative to avoid false positives.
 
-**No LLM calls, no embeddings, no GPU**
-The system is entirely rule-based + feature-weighted, running on pure Python with numpy. No API calls, no model inference. This satisfies the compute constraints and can be reproduced exactly in any environment.
+**No API dependencies, no network, no GPU**
+The system is entirely self-contained, running on pure Python using numpy and scikit-learn. No external API calls are executed during ranking, which satisfies the compute constraints and can be reproduced exactly.
 
 ## Performance
 
 ```
 Stage 0: Bootstrap               0.03s
-Stage 1: Ingestion              10.46s  ███████████
-Stage 2: Early Elimination       0.84s
+Stage 1: Ingestion              10.00s  █████
+Stage 2: Early Elimination       0.75s
 Stage 3a: Behavioral Features    0.13s
-Stage 3b: Tabular Features       0.57s
-Stage 3c: Semantic Features     14.26s  ████████████████
-Stage 4: Honeypot Full Pass      0.19s
-Stage 5: Scoring                 0.09s
+Stage 3b: Tabular Features       0.53s
+Stage 3c: Semantic Features     21.76s  ███████████
+Stage 3d: TF-IDF Semantic Layer 19.68s  ██████████
+Stage 4: Honeypot Full Pass      4.52s  ██
+Stage 5: Scoring                 0.55s
 Stage 6: Top-100 + Guardrails    0.04s
 Stage 7: Output                  0.00s
 ─────────────────────────────────────
-TOTAL                           26.62s  (budget: 300s)
+TOTAL                           57.99s  (budget: 300s)
 ```
 
 ## Compute Constraints Compliance
 
 | Constraint | Limit | Actual |
 |-----------|-------|--------|
-| Runtime | ≤ 5 min | ~27s ✅ |
+| Runtime | ≤ 5 min | ~58s ✅ |
 | Memory | ≤ 16 GB | ~2-3 GB ✅ |
 | Compute | CPU only | Pure Python ✅ |
 | Network | None | No API calls ✅ |

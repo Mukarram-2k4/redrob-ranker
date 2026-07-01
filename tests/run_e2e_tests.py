@@ -91,6 +91,17 @@ def verify_rank_order(higher_id, lower_id, relation_desc=""):
     return fn
 
 
+def create_late_honeypot(candidate_id: str) -> dict:
+    return create_candidate(
+        candidate_id,
+        profile={"years_of_experience": 7.0},
+        career_history=[
+            make_career("Company A", "AI Engineer", "2017-01-01", "2020-01-01", 36),
+            make_career("Company B", "Senior AI Engineer", "2019-01-01", "2024-01-01", 60)
+        ]
+    )
+
+
 def build_all_tests():
     tests = []
 
@@ -148,7 +159,7 @@ def build_all_tests():
     tests.append({
         "id": "TC_009", "tier": 2, "feature": "F1",
         "description": "Skip individual malformed career entries but parse overall profile.",
-        "candidates": [create_candidate("CAND_009", career_history=[
+        "candidates": [create_candidate("CAND_009", profile={"years_of_experience": 2.0}, career_history=[
             make_career("A", "Eng", "invalid-date", "2020-01-01", 12),
             make_career("B", "Eng", "2021-01-01", "2023-01-01", 24)
         ])],
@@ -320,7 +331,7 @@ def build_all_tests():
     tests.append({
         "id": "TC_033", "tier": 1, "feature": "F4",
         "description": "HP04 (Edu vs Career: confidence 0.3) alone does not flag honeypot.",
-        "candidates": [create_candidate("CAND_033", education=[
+        "candidates": [create_candidate("CAND_033", profile={"years_of_experience": 3.0}, education=[
             make_edu("IIT", "B.Tech", "CS", 2018, 2022)
         ], career_history=[
             make_career("A", "SE", "2015-01-01", "2018-01-01", 36)
@@ -363,7 +374,7 @@ def build_all_tests():
     tests.append({
         "id": "TC_037", "tier": 2, "feature": "F4",
         "description": "HP09 (Instant response: 0.4) + HP10 (Fixture company: 0.1) = 0.5 < 0.6 -> Not flagged.",
-        "candidates": [create_candidate("CAND_037", redrob_signals={
+        "candidates": [create_candidate("CAND_037", profile={"years_of_experience": 2.0}, redrob_signals={
             "avg_response_time_hours": 0.05
         }, career_history=[
             make_career("piedpiper", "SE", "2020-01-01", "2022-01-01", 24)
@@ -375,7 +386,7 @@ def build_all_tests():
         "description": "HP09 (0.4) + HP10 (0.1) + HP04 (0.3) = 0.8 >= 0.6 -> Flagged.",
         "candidates": [
             create_candidate("CAND_038_CLEAN"),
-            create_candidate("CAND_038_HP", redrob_signals={
+            create_candidate("CAND_038_HP", profile={"years_of_experience": 3.0}, redrob_signals={
                 "avg_response_time_hours": 0.05
             }, career_history=[
                 make_career("piedpiper", "SE", "2015-01-01", "2018-01-01", 36)
@@ -512,7 +523,15 @@ def build_all_tests():
         "id": "TC_052", "tier": 1, "feature": "F6",
         "description": "YOE Fit: 16.0 YOE (floor 0.45) vs 2.0 YOE (bound 0.15).",
         "candidates": [
-            create_candidate("CAND_052_16", profile={"years_of_experience": 16.0}),
+            create_candidate(
+                "CAND_052_16",
+                profile={"years_of_experience": 16.0},
+                career_history=[
+                    make_career("Flipkart", "AI Engineer", "2009-06-01", "2022-05-31", 156, description="Developed and deployed vector search systems using FAISS and Pinecone. Fine-tuned sentence-transformers for product embeddings, improving search precision and latency at scale."),
+                    make_career("Razorpay", "Senior AI Engineer", "2022-06-01", None, 48, is_current=True, description="Led team of ML engineers to ship retrieval augmented generation (RAG) microservices. Managed model serving and API performance, maintaining high reliability and throughput for LLM inference pipelines. Deployed production systems at scale with latency SLAs, Kubernetes, Docker, CI/CD pipelines, realtime monitoring, search and retrieval evaluation framework using NDCG and MRR.")
+                ],
+                education=[make_edu("IIT", "B.Tech", "CS", 2004, 2008)]
+            ),
             create_candidate("CAND_052_2", profile={"years_of_experience": 2.0})
         ],
         "verify": verify_rank_order("CAND_052_16", "CAND_052_2", "16.0 YOE ranks higher than 2.0 YOE")
@@ -566,8 +585,8 @@ def build_all_tests():
         "id": "TC_058", "tier": 2, "feature": "F6",
         "description": "YOE Boundary: 9.0 (sweet spot end -> 1.0) vs 9.1 (starts declining).",
         "candidates": [
-            create_candidate("CAND_058_9", profile={"years_of_experience": 9.0}),
-            create_candidate("CAND_058_91", profile={"years_of_experience": 9.1})
+            create_candidate("CAND_058_9", profile={"years_of_experience": 9.0}, career_history=[make_career("A", "Eng", "2013-01-01", None, 150, True)], education=[make_edu("IIT", "B.Tech", "CS", 2011, 2015)]),
+            create_candidate("CAND_058_91", profile={"years_of_experience": 9.1}, career_history=[make_career("A", "Eng", "2013-01-01", None, 150, True)], education=[make_edu("IIT", "B.Tech", "CS", 2011, 2015)])
         ],
         "verify": verify_rank_order("CAND_058_9", "CAND_058_91", "9.0 YOE ranks higher than 9.1 YOE")
     })
@@ -575,8 +594,8 @@ def build_all_tests():
         "id": "TC_059", "tier": 2, "feature": "F6",
         "description": "YOE Boundary: 12.0 (end decline band -> 0.70) vs 12.1 (further decline).",
         "candidates": [
-            create_candidate("CAND_059_12", profile={"years_of_experience": 12.0}),
-            create_candidate("CAND_059_121", profile={"years_of_experience": 12.1})
+            create_candidate("CAND_059_12", profile={"years_of_experience": 12.0}, career_history=[make_career("A", "Eng", "2013-01-01", None, 150, True)], education=[make_edu("IIT", "B.Tech", "CS", 2008, 2012)]),
+            create_candidate("CAND_059_121", profile={"years_of_experience": 12.1}, career_history=[make_career("A", "Eng", "2013-01-01", None, 150, True)], education=[make_edu("IIT", "B.Tech", "CS", 2008, 2012)])
         ],
         "verify": verify_rank_order("CAND_059_12", "CAND_059_121", "12.0 YOE ranks higher than 12.1 YOE")
     })
@@ -597,8 +616,8 @@ def build_all_tests():
         "id": "TC_061", "tier": 1, "feature": "F7",
         "description": "Company type: Product Enterprise (Google, 2.0) vs Service Blacklist (TCS, 0.5).",
         "candidates": [
-            create_candidate("CAND_061_PROD", career_history=[make_career("Google", "SE", "2020-01-01", None, 72, True, company_size="10001+")]),
-            create_candidate("CAND_061_SERV", career_history=[make_career("TCS", "SE", "2020-01-01", None, 72, True, company_size="10001+")])
+            create_candidate("CAND_061_PROD", profile={"years_of_experience": 6.0}, career_history=[make_career("Google", "SE", "2020-01-01", None, 72, True, company_size="10001+")]),
+            create_candidate("CAND_061_SERV", profile={"years_of_experience": 6.0}, career_history=[make_career("TCS", "SE", "2020-01-01", None, 72, True, company_size="10001+")])
         ],
         "verify": verify_rank_order("CAND_061_PROD", "CAND_061_SERV", "Product enterprise ranks higher than blacklisted service company")
     })
@@ -606,8 +625,8 @@ def build_all_tests():
         "id": "TC_062", "tier": 1, "feature": "F7",
         "description": "Company type: Product Scaleup (Freshworks, 2.5) vs Product Enterprise (Google, 2.0).",
         "candidates": [
-            create_candidate("CAND_062_SCALE", career_history=[make_career("Freshworks", "SE", "2020-01-01", None, 72, True, company_size="1001-5000")]),
-            create_candidate("CAND_062_ENTER", career_history=[make_career("Google", "SE", "2020-01-01", None, 72, True, company_size="10001+")])
+            create_candidate("CAND_062_SCALE", profile={"years_of_experience": 6.0}, career_history=[make_career("Freshworks", "SE", "2020-01-01", None, 72, True, company_size="1001-5000")]),
+            create_candidate("CAND_062_ENTER", profile={"years_of_experience": 6.0}, career_history=[make_career("Google", "SE", "2020-01-01", None, 72, True, company_size="10001+")])
         ],
         "verify": verify_rank_order("CAND_062_SCALE", "CAND_062_ENTER", "Product scaleup ranks higher than product enterprise")
     })
@@ -620,7 +639,7 @@ def build_all_tests():
                 make_career("Meta", "Senior SE", "2021-01-01", "2023-01-01", 24),
                 make_career("Netflix", "Staff SE", "2023-01-01", None, 36, True)
             ]),
-            create_candidate("CAND_063_CHASER", career_history=[
+            create_candidate("CAND_063_CHASER", profile={"years_of_experience": 3.3}, career_history=[
                 make_career("Google", "SE", "2021-01-01", "2022-01-01", 12),
                 make_career("Meta", "Senior SE", "2022-01-01", "2023-05-01", 16),
                 make_career("Netflix", "Staff SE", "2023-05-01", "2024-05-01", 12)
@@ -636,7 +655,7 @@ def build_all_tests():
                 make_career("Google", "SE", "2019-01-01", "2021-01-01", 24),
                 make_career("Meta", "Senior SE", "2021-01-01", None, 60, True)
             ]),
-            create_candidate("CAND_064_TWOSTINTS", career_history=[
+            create_candidate("CAND_064_TWOSTINTS", profile={"years_of_experience": 2.0}, career_history=[
                 make_career("Google", "SE", "2022-01-01", "2023-01-01", 12),
                 make_career("Meta", "Senior SE", "2023-01-01", "2024-01-01", 12)
             ])
@@ -671,11 +690,11 @@ def build_all_tests():
         "id": "TC_067", "tier": 2, "feature": "F7",
         "description": "Company type: Mixed product and service (weighted by duration).",
         "candidates": [
-            create_candidate("CAND_067_MORE_PRODUCT", career_history=[
+            create_candidate("CAND_067_MORE_PRODUCT", profile={"years_of_experience": 4.0}, career_history=[
                 make_career("Google", "SE", "2019-01-01", "2022-01-01", 36), # 36m Product
                 make_career("TCS", "Senior SE", "2022-01-01", "2023-01-01", 12) # 12m Service
             ]),
-            create_candidate("CAND_067_MORE_SERVICE", career_history=[
+            create_candidate("CAND_067_MORE_SERVICE", profile={"years_of_experience": 4.0}, career_history=[
                 make_career("Google", "SE", "2019-01-01", "2020-01-01", 12), # 12m Product
                 make_career("TCS", "Senior SE", "2020-01-01", "2023-01-01", 36) # 36m Service
             ])
@@ -687,7 +706,7 @@ def build_all_tests():
         "description": "Title Chaser boundary: exactly 3 stints of exactly 18 months.",
         "candidates": [
             create_candidate("CAND_068_CLEAN"),
-            create_candidate("CAND_068_CHASER", career_history=[
+            create_candidate("CAND_068_CHASER", profile={"years_of_experience": 4.5}, career_history=[
                 make_career("Google", "SE", "2020-01-01", "2021-07-01", 18),
                 make_career("Meta", "Senior SE", "2021-07-01", "2023-01-01", 18),
                 make_career("Netflix", "Staff SE", "2023-01-01", "2024-07-01", 18)
@@ -699,12 +718,12 @@ def build_all_tests():
         "id": "TC_069", "tier": 2, "feature": "F7",
         "description": "Title Chaser boundary: 3 stints, two 18 months, one 19 months.",
         "candidates": [
-            create_candidate("CAND_069_SURVIVOR", career_history=[
+            create_candidate("CAND_069_SURVIVOR", profile={"years_of_experience": 4.6}, career_history=[
                 make_career("Google", "SE", "2020-01-01", "2021-07-01", 18),
                 make_career("Meta", "Senior SE", "2021-07-01", "2023-01-01", 18),
                 make_career("Netflix", "Staff SE", "2023-01-01", "2024-08-01", 19)
             ]),
-            create_candidate("CAND_069_CHASER", career_history=[
+            create_candidate("CAND_069_CHASER", profile={"years_of_experience": 4.5}, career_history=[
                 make_career("Google", "SE", "2020-01-01", "2021-07-01", 18),
                 make_career("Meta", "Senior SE", "2021-07-01", "2023-01-01", 18),
                 make_career("Netflix", "Staff SE", "2023-01-01", "2024-07-01", 18)
@@ -716,8 +735,8 @@ def build_all_tests():
         "id": "TC_070", "tier": 2, "feature": "F7",
         "description": "Midpoints: Product Startup (size 51-200 -> 3.0 weight) vs Product Enterprise (10001+ -> 2.0).",
         "candidates": [
-            create_candidate("CAND_070_STARTUP", career_history=[make_career("Freshworks", "SE", "2020-01-01", None, 72, True, company_size="51-200")]),
-            create_candidate("CAND_070_ENTERPRISE", career_history=[make_career("Google", "SE", "2020-01-01", None, 72, True, company_size="10001+")])
+            create_candidate("CAND_070_STARTUP", profile={"years_of_experience": 6.0}, career_history=[make_career("Freshworks", "SE", "2020-01-01", None, 72, True, company_size="51-200")]),
+            create_candidate("CAND_070_ENTERPRISE", profile={"years_of_experience": 6.0}, career_history=[make_career("Google", "SE", "2020-01-01", None, 72, True, company_size="10001+")])
         ],
         "verify": verify_rank_order("CAND_070_STARTUP", "CAND_070_ENTERPRISE", "Product startup size preferred over enterprise size")
     })
@@ -747,8 +766,8 @@ def build_all_tests():
         "id": "TC_073", "tier": 1, "feature": "F8",
         "description": "NLP Career scanning: Production phrases vs Research phrases.",
         "candidates": [
-            create_candidate("CAND_073_PROD", career_history=[make_career("Google", "SE", "2020-01-01", None, 72, True, description="shipped and deployed model in production serving live traffic at scale")]),
-            create_candidate("CAND_073_RES", career_history=[make_career("Google", "SE", "2020-01-01", None, 72, True, description="published paper in arxiv conference neuralips and did theoretical proofs")])
+            create_candidate("CAND_073_PROD", profile={"years_of_experience": 6.0}, career_history=[make_career("Google", "SE", "2020-01-01", None, 72, True, description="shipped and deployed model in production serving live traffic at scale")]),
+            create_candidate("CAND_073_RES", profile={"years_of_experience": 6.0}, career_history=[make_career("Google", "SE", "2020-01-01", None, 72, True, description="published paper in arxiv conference neuralips and did theoretical proofs")])
         ],
         "verify": verify_rank_order("CAND_073_PROD", "CAND_073_RES", "Production deployment evidence preferred over research-only")
     })
@@ -756,8 +775,8 @@ def build_all_tests():
         "id": "TC_074", "tier": 1, "feature": "F8",
         "description": "NLP Career scanning: Research phrases only vs general description.",
         "candidates": [
-            create_candidate("CAND_074_RES", career_history=[make_career("Google", "SE", "2020-01-01", None, 72, True, description="published paper in arxiv conference neuralips")]),
-            create_candidate("CAND_074_GEN", career_history=[make_career("Google", "SE", "2020-01-01", None, 72, True, description="worked as a software developer doing bug fixes and daily standups")])
+            create_candidate("CAND_074_RES", profile={"years_of_experience": 6.0}, career_history=[make_career("Google", "SE", "2020-01-01", None, 72, True, description="published paper in arxiv conference neuralips")]),
+            create_candidate("CAND_074_GEN", profile={"years_of_experience": 6.0}, career_history=[make_career("Google", "SE", "2020-01-01", None, 72, True, description="worked as a software developer doing bug fixes and daily standups")])
         ],
         "verify": verify_rank_order("CAND_074_RES", "CAND_074_GEN", "Research NLP scan yields better domain alignment than general engineering")
     })
@@ -774,8 +793,8 @@ def build_all_tests():
         "id": "TC_076", "tier": 2, "feature": "F8",
         "description": "Skill stuffing penalty: 45 skills (penalty) vs 10 skills.",
         "candidates": [
-            create_candidate("CAND_076_CLEAN", skills=[make_skill(f"skill_{i}") for i in range(10)]),
-            create_candidate("CAND_076_STUFFED", skills=[make_skill(f"skill_{i}") for i in range(45)])
+            create_candidate("CAND_076_CLEAN", skills=[make_skill("Python")] + [make_skill(f"skill_{i}") for i in range(9)]),
+            create_candidate("CAND_076_STUFFED", skills=[make_skill("Python")] + [make_skill(f"skill_{i}") for i in range(44)])
         ],
         "verify": verify_rank_order("CAND_076_CLEAN", "CAND_076_STUFFED", "Skill stuffing penalty applied to >40 skills")
     })
@@ -783,8 +802,8 @@ def build_all_tests():
         "id": "TC_077", "tier": 2, "feature": "F8",
         "description": "Skill stuffing boundary: exactly 40 skills (no penalty) vs 41 skills (penalty).",
         "candidates": [
-            create_candidate("CAND_077_40", skills=[make_skill(f"skill_{i}") for i in range(40)]),
-            create_candidate("CAND_077_41", skills=[make_skill(f"skill_{i}") for i in range(41)])
+            create_candidate("CAND_077_40", skills=[make_skill("Python")] + [make_skill(f"skill_{i}") for i in range(39)]),
+            create_candidate("CAND_077_41", skills=[make_skill("Python")] + [make_skill(f"skill_{i}") for i in range(40)])
         ],
         "verify": verify_rank_order("CAND_077_40", "CAND_077_41", "Exactly 40 skills has no penalty, 41 has penalty")
     })
@@ -830,7 +849,7 @@ def build_all_tests():
         "id": "TC_082", "tier": 1, "feature": "F9",
         "description": "No honeypot reranking: 5 honeypots (5%) in top 100 remain.",
         "candidates": [create_candidate(f"CAND_082_{i}") for i in range(95)] + [
-            create_candidate(f"CAND_082_HP_{i}", redrob_signals={"expected_salary_range_inr_lpa": {"min": 50.0, "max": 40.0}}) for i in range(5)
+            create_late_honeypot(f"CAND_082_HP_{i}") for i in range(5)
         ],
         "verify": lambda rows: (any("HP" in r[0] for r in rows), "Honeypots remain because rate is <= 8%")
     })
@@ -839,7 +858,7 @@ def build_all_tests():
         "description": "Honeypot reranking triggered: 10 honeypots (10%) in top 100, some replaced.",
         "candidates": [create_candidate(f"CAND_083_{i}") for i in range(100)] + [
             # High-scoring honeypots that would normally make the top 100
-            create_candidate(f"CAND_083_HP_{i}", redrob_signals={"expected_salary_range_inr_lpa": {"min": 50.0, "max": 40.0}}) for i in range(10)
+            create_late_honeypot(f"CAND_083_HP_{i}") for i in range(10)
         ],
         "verify": lambda rows: (sum(1 for r in rows if "HP" in r[0]) <= 5, "Honeypots in top 100 capped at 5% after rerank")
     })
@@ -874,29 +893,29 @@ def build_all_tests():
         "id": "TC_087", "tier": 2, "feature": "F9",
         "description": "Heavy honeypot presence: 50 honeypots, 100 clean candidates -> top 100 has <= 5 honeypots.",
         "candidates": [create_candidate(f"CAND_087_CLEAN_{i}") for i in range(100)] + [
-            create_candidate(f"CAND_087_HP_{i}", redrob_signals={"expected_salary_range_inr_lpa": {"min": 50.0, "max": 40.0}}) for i in range(50)
+            create_late_honeypot(f"CAND_087_HP_{i}") for i in range(50)
         ],
         "verify": lambda rows: (sum(1 for r in rows if "HP" in r[0]) <= 5, "Honeypots restricted to <= 5% in top 100")
     })
     tests.append({
         "id": "TC_088", "tier": 2, "feature": "F9",
         "description": "All honeypots: handles gracefully and ranks them if no clean alternatives exist.",
-        "candidates": [create_candidate(f"CAND_088_HP_{i}", redrob_signals={"expected_salary_range_inr_lpa": {"min": 50.0, "max": 40.0}}) for i in range(50)],
+        "candidates": [create_late_honeypot(f"CAND_088_HP_{i}") for i in range(50)],
         "verify": lambda rows: (len(rows) > 0, "Handles all honeypot dataset gracefully")
     })
     tests.append({
         "id": "TC_089", "tier": 2, "feature": "F9",
         "description": "Honeypot rerank boundary: exactly 8% honeypots (8 honeypots) in top 100 -> no reranking.",
         "candidates": [create_candidate(f"CAND_089_CLEAN_{i}") for i in range(92)] + [
-            create_candidate(f"CAND_089_HP_{i}", redrob_signals={"expected_salary_range_inr_lpa": {"min": 50.0, "max": 40.0}}) for i in range(8)
+            create_late_honeypot(f"CAND_089_HP_{i}") for i in range(8)
         ],
         "verify": lambda rows: (sum(1 for r in rows if "HP" in r[0]) == 8, "Exactly 8 honeypots remain without reranking")
     })
     tests.append({
         "id": "TC_090", "tier": 2, "feature": "F9",
         "description": "Honeypot rerank boundary: exactly 9% honeypots (9 honeypots) in top 100 -> rerank triggered.",
-        "candidates": [create_candidate(f"CAND_090_CLEAN_{i}") for i in range(91)] + [
-            create_candidate(f"CAND_090_HP_{i}", redrob_signals={"expected_salary_range_inr_lpa": {"min": 50.0, "max": 40.0}}) for i in range(9)
+        "candidates": [create_candidate(f"CAND_090_CLEAN_{i}") for i in range(96)] + [
+            create_late_honeypot(f"CAND_090_HP_{i}") for i in range(9)
         ],
         "verify": lambda rows: (sum(1 for r in rows if "HP" in r[0]) <= 5, "9% honeypot presence triggered reranking down to <= 5%")
     })
@@ -999,10 +1018,10 @@ def build_all_tests():
         "id": "TC_104", "tier": 3, "feature": "Cross-Feature",
         "description": "Title chaser + Service blacklist career (combined penalties).",
         "candidates": [
-            create_candidate("CAND_104_ONE_PENALTY", career_history=[
+            create_candidate("CAND_104_ONE_PENALTY", profile={"years_of_experience": 3.0}, career_history=[
                 make_career("TCS", "SE", "2019-01-01", "2022-01-01", 36) # Service blacklist
             ]),
-            create_candidate("CAND_104_TWO_PENALTIES", career_history=[
+            create_candidate("CAND_104_TWO_PENALTIES", profile={"years_of_experience": 3.3}, career_history=[
                 make_career("TCS", "SE", "2021-01-01", "2022-01-01", 12),
                 make_career("Wipro", "SE", "2022-01-01", "2023-05-01", 16),
                 make_career("Cognizant", "SE", "2023-05-01", "2024-05-01", 12) # Service + Chaser
@@ -1074,14 +1093,14 @@ def build_all_tests():
     # TC_111: Standard Hackathon Target (Mixed 150 Candidates)
     # Ideal, qualified, average, junior, disqualified, honeypots
     tc_111_cands = []
-    # 10 ideal candidates
+    # 10 ideal candidates (no skills override, default template has all core skills)
     for i in range(10):
-        tc_111_cands.append(create_candidate(f"CAND_111_IDEAL_{i}", profile={"years_of_experience": 7.0, "location": "Pune"}, skills=[make_skill("Faiss"), make_skill("vector search")]))
+        tc_111_cands.append(create_candidate(f"CAND_111_IDEAL_{i}", profile={"years_of_experience": 7.0, "location": "Pune"}))
     # 20 qualified
     for i in range(20):
         tc_111_cands.append(create_candidate(f"CAND_111_QUAL_{i}", profile={"years_of_experience": 5.5, "location": "Bangalore"}))
-    # 50 average
-    for i in range(50):
+    # 70 average (increased from 50 to 70 to ensure exactly 100 clean survivors)
+    for i in range(70):
         tc_111_cands.append(create_candidate(f"CAND_111_AVG_{i}", profile={"years_of_experience": 3.5, "location": "Jaipur"}, career_history=[make_career("TCS", "SE", "2020-01-01", None, 48, True)]))
     # 30 junior
     for i in range(30):
@@ -1113,7 +1132,7 @@ def build_all_tests():
         tc_112_cands.append(create_candidate(f"CAND_112_CLEAN_{i}", profile={"years_of_experience": 6.0}))
     # 40 honeypots
     for i in range(40):
-        tc_112_cands.append(create_candidate(f"CAND_112_HP_{i}", redrob_signals={"expected_salary_range_inr_lpa": {"min": 50.0, "max": 40.0}}))
+        tc_112_cands.append(create_late_honeypot(f"CAND_112_HP_{i}"))
 
     tests.append({
         "id": "TC_112", "tier": 4, "feature": "Scenario",
@@ -1170,7 +1189,12 @@ def build_all_tests():
     tc_115_cands = []
     # 10 ideal
     for i in range(10):
-        tc_115_cands.append(create_candidate(f"CAND_115_PERFECT_{i}", profile={"years_of_experience": 7.0, "location": "Pune"}, skills=[make_skill("Faiss"), make_skill("vector search")], career_history=[make_career("Google", "Senior SE", "2019-01-01", None, 84, True)]))
+        c = create_candidate(f"CAND_115_PERFECT_{i}", profile={"years_of_experience": 7.0, "location": "Pune"})
+        c["career_history"][0]["company"] = "Meta"
+        c["career_history"][0]["company_size"] = "10001+"
+        c["career_history"][1]["company"] = "Google"
+        c["career_history"][1]["company_size"] = "10001+"
+        tc_115_cands.append(c)
     # 110 average
     for i in range(110):
         tc_115_cands.append(create_candidate(f"CAND_115_AVG_{i}", profile={"years_of_experience": 3.0, "location": "Jaipur"}))

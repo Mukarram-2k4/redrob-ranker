@@ -1,6 +1,7 @@
 from datetime import date
 import re
 from src.models import Candidate
+from src.ingest import normalize_text
 from src.config import (
     FIXTURE_COMPANIES,
     HARD_DISQUALIFY_RR_THRESHOLD,
@@ -14,7 +15,10 @@ from src.config import (
     HP08_MIN_ASSESSMENTS,
     HP08_SCORE_THRESHOLD,
     HP09_RESPONSE_TIME_THRESHOLD,
-    CURRENT_YEAR
+    CURRENT_YEAR,
+    TECH_RELEASE_YEARS,
+    SKILL_ADJACENCY,
+    HP13_ARCHITECTURE_ASTRONAUT_PENALTY,
 )
 
 fixture_pattern = re.compile(
@@ -140,15 +144,145 @@ def get_overlap_days(e1, e2) -> int:
     return 0
 
 
+def _get_max_career_year(cand: Candidate) -> int:
+    """Get the maximum career end year across all entries."""
+    if not cand.career_history:
+        return 0
+    max_year = 0
+    for entry in cand.career_history:
+        if entry.is_current:
+            max_year = CURRENT_YEAR
+        elif entry.end_date is not None:
+            max_year = max(max_year, entry.end_date.year)
+    return max_year
+
+
+def _check_time_travel(cand: Candidate) -> float:
+    """
+    HP11: Technology Time-Travel Fraud Detection.
+    
+    Bulletproof version: checks BOTH:
+    1. Global profile (skills + headline + summary) against max_career_year
+    2. Per-entry career descriptions against entry end_date
+    """
+    confidence = 0.0
+    max_career_year = _get_max_career_year(cand)
+    
+    if max_career_year == 0:
+        return 0.0
+    
+    # Check 1: Global profile — skills, headline, summary
+    global_text = " ".join(s.name.lower() for s in cand.skills)
+    if cand.headline:
+        global_text += " " + cand.headline.lower()
+    if cand.summary:
+        global_text += " " + cand.summary.lower()
+    global_text = normalize_text(global_text)
+    
+    for tech, release_year in TECH_RELEASE_YEARS.items():
+        if tech in global_text and max_career_year < release_year:
+            confidence = HONEYPOT_RULES["HP11_TECH_TIME_TRAVEL"]
+            return confidence  # One violation is enough
+    
+    # Check 2: Per-entry career descriptions
+    for entry in cand.career_history:
+        end_year = entry.end_date.year if (entry.end_date and not entry.is_current) else CURRENT_YEAR
+        desc_lower = normalize_text(entry.description + " " + entry.title)
+        for tech, release_year in TECH_RELEASE_YEARS.items():
+            if tech in desc_lower and end_year < release_year:
+                confidence = HONEYPOT_RULES["HP11_TECH_TIME_TRAVEL"]
+                return confidence
+    
+    return confidence
+
+
+def _check_empty_expertise(cand: Candidate) -> float:
+    """
+    HP12: Expert proficiency claims with 0 months duration and no endorsements.
+    Common synthetic honeypot pattern.
+    """
+    count = sum(
+        1 for s in cand.skills
+        if s.proficiency == "expert"
+        and s.duration_months == 0
+        and s.endorsements <= 1
+    )
+    if count >= 10:
+        return HONEYPOT_RULES["HP12_EMPTY_EXPERTISE"]
+    elif count >= 5:
+        return 0.40
+    return 0.0
+
+
+def _check_architecture_astronaut(cand: Candidate) -> float:
+    """
+    HP13: Manager/Director/VP titles without hands-on coding evidence.
+    JD says "founding team member who codes" — not a honeypot but a penalty.
+    Returns the penalty value (not honeypot confidence).
+    """
+    title_lower = cand.current_title.lower() if cand.current_title else ""
+    
+    manager_keywords = ["director", "vp ", "vice president", "head of", "general manager"]
+    is_manager = any(kw in title_lower for kw in manager_keywords)
+    is_pure_architect = "architect" in title_lower and "engineer" not in title_lower
+    
+    if not (is_manager or is_pure_architect):
+        return 0.0
+    
+    # Check recent career (≤3 years ago) for hands-on markers
+    hands_on_markers = [
+        "wrote", "coded", "implemented", "developed", "built",
+        "engineered", "deployed", "shipped", "python", "git",
+        "hands-on", "hands on", "contributed code",
+    ]
+    recent_desc = " ".join(
+        entry.description.lower() for entry in cand.career_history
+        if entry.years_ago <= 3
+    )
+    
+    if any(marker in recent_desc for marker in hands_on_markers):
+        return 0.0  # They have hands-on evidence
+    
+    return HP13_ARCHITECTURE_ASTRONAUT_PENALTY
+
+
+def _check_skill_adjacency(cand: Candidate) -> float:
+    """
+    HP14: Skill Adjacency Corroboration.
+    High-value skills without adjacent supporting skills → reduced trust.
+    """
+    skill_names = {s.name.lower().strip() for s in cand.skills}
+    
+    corroborated = 0
+    checkable = 0
+    for skill_key, adjacencies in SKILL_ADJACENCY.items():
+        if skill_key in skill_names:
+            checkable += 1
+            if any(adj in skill_names for adj in adjacencies):
+                corroborated += 1
+    
+    if checkable == 0:
+        return 0.0  # No checkable skills = neutral
+    
+    ratio = corroborated / checkable
+    if ratio < 0.5:
+        return HONEYPOT_RULES["HP14_SKILL_ADJACENCY"] * (1.0 - ratio)
+    return 0.0
+
+
 def honeypot_full_pass(survivors: list[Candidate]) -> None:
     """
-    Check rules HP03, HP04, HP07, HP08, HP09, HP10 on survivors.
-      - HP03: Overlap of any two career entries > HP03_OVERLAP_DAYS days. (confidence = HONEYPOT_RULES["HP03_OVERLAPPING_TENURES"])
-      - HP04: Earliest job start year < earliest education start year. (confidence = HONEYPOT_RULES["HP04_EDU_VS_CAREER_START"])
-      - HP07: profile_completeness_score == HP07_COMPLETENESS_THRESHOLD AND inactivity period > HP07_INACTIVE_DAYS days. (confidence = HONEYPOT_RULES["HP07_PERFECT_ABANDONED"])
-      - HP08: >= HP08_MIN_ASSESSMENTS assessments AND all scores >= HP08_SCORE_THRESHOLD. (confidence = HONEYPOT_RULES["HP08_ALL_ASSESSMENTS_PERF"])
-      - HP09: average response time <= HP09_RESPONSE_TIME_THRESHOLD hours. (confidence = HONEYPOT_RULES["HP09_INSTANT_RESPONSE"])
-      - HP10: Any company name in FIXTURE_COMPANIES in config.py (case-insensitive, stripped). (confidence = HONEYPOT_RULES["HP10_FIXTURE_COMPANY"])
+    Check rules HP03, HP04, HP07, HP08, HP09, HP10, HP11, HP12, HP13, HP14 on survivors.
+      - HP03: Overlap of any two career entries > HP03_OVERLAP_DAYS days.
+      - HP04: Earliest job start year < earliest education start year.
+      - HP07: profile_completeness_score == 100 AND inactivity > 3 years.
+      - HP08: >= 3 assessments AND all scores >= 90.
+      - HP09: average response time <= 0.1 hours.
+      - HP10: Any company name in FIXTURE_COMPANIES.
+      - HP11: Technology time-travel fraud.
+      - HP12: Empty expertise (expert + 0 months + ≤1 endorsements).
+      - HP13: Architecture astronaut (penalty, not confidence).
+      - HP14: Skill adjacency corroboration.
 
     Sum confidences onto cand.honeypot_confidence.
     If accumulated confidence >= HONEYPOT_CONFIDENCE_THRESHOLD, set cand.honeypot_flag = True.
@@ -204,9 +338,24 @@ def honeypot_full_pass(survivors: list[Candidate]) -> None:
         if has_fixture:
             hp10_conf = HONEYPOT_RULES["HP10_FIXTURE_COMPANY"]
 
+        # HP11: Time-travel fraud
+        hp11_conf = _check_time_travel(cand)
+
+        # HP12: Empty expertise
+        hp12_conf = _check_empty_expertise(cand)
+
+        # HP13: Architecture astronaut (penalty stored in features, not confidence)
+        hp13_penalty = _check_architecture_astronaut(cand)
+        if hp13_penalty > 0.0:
+            cand.features["architecture_astronaut_penalty"] = hp13_penalty
+
+        # HP14: Skill adjacency corroboration
+        hp14_conf = _check_skill_adjacency(cand)
+
         # Sum confidences
         cand.honeypot_confidence += (
             hp03_conf + hp04_conf + hp07_conf + hp08_conf + hp09_conf + hp10_conf
+            + hp11_conf + hp12_conf + hp14_conf
         )
 
         if cand.honeypot_confidence >= HONEYPOT_CONFIDENCE_THRESHOLD:

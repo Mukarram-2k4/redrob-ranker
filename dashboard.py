@@ -235,7 +235,8 @@ with st.sidebar:
         ("Behavioral Features", "0.1s", 0.13),
         ("Tabular Features", "0.6s", 0.57),
         ("Semantic NLP", "14.3s", 14.26),
-        ("Honeypot Detection", "0.2s", 0.19),
+        ("TF-IDF Semantic Layer", "1.2s", 1.20),
+        ("Honeypot Full Pass", "0.2s", 0.19),
         ("Scoring", "0.1s", 0.09),
         ("Output", "0.04s", 0.04),
     ]
@@ -257,22 +258,15 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     st.divider()
-    st.markdown("**Scoring Formula**")
-    st.code("""final_score =
-  technical_score
-  × title_relevance   # 0.25–1.0
-  × behavioral_mult   # 0.35–1.15
-  + edu_bonus + micro_bonuses
+    st.markdown("**Scoring Architecture**")
+    st.code("""5-Dimension Reciprocal Rank Fusion (RRF):
+1. Technical Score
+2. Career Trajectory
+3. Behavioral Score
+4. Trust (Inverse HP Confidence)
+5. Semantic (TF-IDF vs JD)
 
-technical_score =
-  0.35 × career_nlp
-  0.15 × skill_depth
-  0.12 × company_type
-  0.10 × domain
-  0.08 × exp_fit
-  0.07 × recency
-  0.05 × location
-  0.05 × platform_cred""", language="text")
+final_score = RRF_score × trust_mult × penalties + bonuses""", language="text")
 
 
 # ── Helper: Run pipeline ──────────────────────────────────────────────────────
@@ -333,15 +327,21 @@ def run_pipeline(candidates_data, data_source_label):
     compute_semantic_features(survivors, lookups, n_workers=1)
     stage_times.append(("Semantic NLP", time.perf_counter() - t_s))
 
+    # Stage 3d
+    t_s = time.perf_counter()
+    from src.semantic import compute_tfidf_scores
+    tfidf_scores = compute_tfidf_scores(survivors)
+    stage_times.append(("TF-IDF Semantic Layer", time.perf_counter() - t_s))
+
     # Stage 4
     t_s = time.perf_counter()
     honeypot_full_pass(survivors)
     hp_count = sum(1 for c in survivors if c.honeypot_flag)
-    stage_times.append(("Honeypot Detection", time.perf_counter() - t_s))
+    stage_times.append(("Honeypot Full Pass", time.perf_counter() - t_s))
 
     # Stage 5
     t_s = time.perf_counter()
-    compute_scores(survivors)
+    compute_scores(survivors, tfidf_scores)
     stage_times.append(("Scoring", time.perf_counter() - t_s))
 
     # Stage 6
@@ -668,28 +668,31 @@ with tab2:
                     feats = r["features"]
                     sigs = r.get("signals", {})
 
-                    f1, f2, f3, f4 = st.columns(4)
+                    ranks = feats.get("dim_ranks", {})
+                    f1, f2, f3, f4, f5 = st.columns(5)
                     with f1:
-                        st.markdown("**Technical Scores**")
+                        st.markdown("**Dim 1: Tech**")
+                        st.metric("Rank", f"#{ranks.get('T', 9999)}")
                         st.metric("Career NLP", f"{feats.get('career_nlp_score', 0):.3f}")
                         st.metric("Skill Depth", f"{feats.get('skill_depth_score', 0):.3f}")
-                        st.metric("Domain", f"{feats.get('domain_score', 0):.3f}")
                     with f2:
-                        st.markdown("**Fit Scores**")
+                        st.markdown("**Dim 2: Traj**")
+                        st.metric("Rank", f"#{ranks.get('C', 9999)}")
                         st.metric("Exp Fit", f"{feats.get('exp_fit_score', 0):.3f}")
-                        st.metric("Company Type", f"{feats.get('company_type_score', 0):.3f}")
-                        st.metric("Location", f"{feats.get('location_score', 0):.3f}")
+                        st.metric("Title Rel", f"{feats.get('title_relevance', 0):.2f}")
                     with f3:
-                        st.markdown("**Behavioral**")
+                        st.markdown("**Dim 3: Behav**")
+                        st.metric("Rank", f"#{ranks.get('B', 9999)}")
                         st.metric("Behavioral", f"{feats.get('behavioral_score', 0):.3f}")
                         st.metric("Multiplier", f"{feats.get('behavioral_multiplier', 1):.2f}×")
-                        st.metric("Title Relevance", f"{feats.get('title_relevance', 0):.2f}")
                     with f4:
-                        st.markdown("**Signals**")
-                        st.metric("Response Rate", f"{sigs.get('recruiter_response_rate', 0):.0%}")
-                        st.metric("Notice Period", f"{sigs.get('notice_period_days', 0)}d")
-                        gh = sigs.get('github_activity_score', -1)
-                        st.metric("GitHub", f"{gh:.0f}" if gh >= 0 else "N/A")
+                        st.markdown("**Dim 4: Trust**")
+                        st.metric("Rank", f"#{ranks.get('Tr', 9999)}")
+                        st.metric("HP Conf", f"{r.get('honeypot_confidence', 0.0):.2f}")
+                    with f5:
+                        st.markdown("**Dim 5: Sem**")
+                        st.metric("Rank", f"#{ranks.get('S', 9999)}")
+                        st.metric("Signals", "Below")
 
                     # Skill tier tags
                     skill_tiers = r.get("skill_tiers", {})
@@ -737,25 +740,17 @@ with tab3:
 
                     feats = r.get("features", {})
                     st.markdown("#### Feature Breakdown")
+                    ranks = feats.get("dim_ranks", {})
                     feat_data = {
-                        "Feature": ["Career NLP", "Skill Depth", "Domain", "Exp Fit", "Company Type",
-                                   "Location", "Recency", "Platform Cred", "Title Relevance",
-                                   "Behavioral Mult", "Edu Bonus"],
-                        "Score": [
-                            f"{feats.get('career_nlp_score', 0):.3f}",
-                            f"{feats.get('skill_depth_score', 0):.3f}",
-                            f"{feats.get('domain_score', 0):.3f}",
-                            f"{feats.get('exp_fit_score', 0):.3f}",
-                            f"{feats.get('company_type_score', 0):.3f}",
-                            f"{feats.get('location_score', 0):.3f}",
-                            f"{feats.get('recency_score', 0):.3f}",
-                            f"{feats.get('platform_cred_score', 0):.3f}",
-                            f"{feats.get('title_relevance', 0):.2f}",
-                            f"{feats.get('behavioral_multiplier', 1):.2f}×",
-                            f"{feats.get('edu_bonus', 0):.3f}",
+                        "Dimension": ["Technical (Dim 1)", "Trajectory (Dim 2)", "Behavioral (Dim 3)", "Trust (Dim 4)", "Semantic TF-IDF (Dim 5)"],
+                        "Rank": [
+                            f"#{ranks.get('T', 9999)}",
+                            f"#{ranks.get('C', 9999)}",
+                            f"#{ranks.get('B', 9999)}",
+                            f"#{ranks.get('Tr', 9999)}",
+                            f"#{ranks.get('S', 9999)}",
                         ],
-                        "Weight": ["0.35", "0.15", "0.10", "0.08", "0.12", "0.05", "0.07", "0.05",
-                                  "mult", "mult", "additive"],
+                        "RRF Weight": ["1.6", "1.2", "0.8", "0.8", "1.0"]
                     }
                     st.table(feat_data)
 
@@ -780,14 +775,14 @@ with tab3:
 
                 if r1 and r2:
                     compare_features = [
-                        ("Career NLP", "career_nlp_score"),
-                        ("Skill Depth", "skill_depth_score"),
-                        ("Domain", "domain_score"),
-                        ("Exp Fit", "exp_fit_score"),
-                        ("Company Type", "company_type_score"),
-                        ("Location", "location_score"),
-                        ("Title Relevance", "title_relevance"),
-                        ("Behavioral Mult", "behavioral_multiplier"),
+                        ("Dim 1 Rank", "T", True),
+                        ("Dim 2 Rank", "C", True),
+                        ("Dim 3 Rank", "B", True),
+                        ("Dim 4 Rank", "Tr", True),
+                        ("Dim 5 Rank", "S", True),
+                        ("Career NLP", "career_nlp_score", False),
+                        ("Exp Fit", "exp_fit_score", False),
+                        ("Behavioral", "behavioral_score", False),
                     ]
 
                     st.markdown("#### Side-by-Side Comparison")
@@ -810,15 +805,22 @@ with tab3:
                         """, unsafe_allow_html=True)
 
                     compare_data = {"Feature": [], "Candidate A": [], "Candidate B": [], "Winner": []}
-                    for label, key in compare_features:
-                        v1 = r1.get("features", {}).get(key, 0)
-                        v2 = r2.get("features", {}).get(key, 0)
+                    for label, key, is_rank in compare_features:
+                        if is_rank:
+                            v1 = r1.get("features", {}).get("dim_ranks", {}).get(key, 9999)
+                            v2 = r2.get("features", {}).get("dim_ranks", {}).get(key, 9999)
+                        else:
+                            v1 = r1.get("features", {}).get(key, 0)
+                            v2 = r2.get("features", {}).get(key, 0)
+                        
                         compare_data["Feature"].append(label)
-                        compare_data["Candidate A"].append(f"{v1:.3f}")
-                        compare_data["Candidate B"].append(f"{v2:.3f}")
-                        if v1 > v2:
+                        compare_data["Candidate A"].append(f"#{v1}" if is_rank else f"{v1:.3f}")
+                        compare_data["Candidate B"].append(f"#{v2}" if is_rank else f"{v2:.3f}")
+                        
+                        # For ranks, lower is better. For scores, higher is better.
+                        if (is_rank and v1 < v2) or (not is_rank and v1 > v2):
                             compare_data["Winner"].append("← A")
-                        elif v2 > v1:
+                        elif (is_rank and v2 < v1) or (not is_rank and v2 > v1):
                             compare_data["Winner"].append("B →")
                         else:
                             compare_data["Winner"].append("Tie")

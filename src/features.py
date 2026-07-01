@@ -6,6 +6,7 @@ except ImportError:
     HAS_AHOCORASICK = False
 
 from src.models import Candidate
+from src.ingest import normalize_text
 from src.config import (
     BEHAVIORAL_WEIGHTS,
     AVAILABILITY_WEIGHTS,
@@ -39,7 +40,8 @@ from src.config import (
     SKILL_STUFFING_THRESHOLD,
     SKILL_STUFFING_PENALTY_RATE,
     SKILL_STUFFING_PENALTY_FLOOR,
-    ALL_SERVICES_HARD_CAP
+    ALL_SERVICES_HARD_CAP,
+    SOURCE_WEIGHTS,
 )
 
 
@@ -210,7 +212,8 @@ def compute_tabular_features(survivors: list[Candidate], lookups: dict) -> None:
 
         if all_services:
             comp_score = min(comp_score, 0.30)
-        cand.features["company_type_score"] = comp_score
+        # CRITICAL FIX: Normalize to [0, 1] — raw range is 0.5-3.0
+        cand.features["company_type_score"] = comp_score / 3.0
 
         # Title chaser penalty
         short_stints = sum(1 for entry in cand.career_history if entry.duration_months <= 18)
@@ -288,19 +291,33 @@ def count_matches(text: str, scanner) -> int:
 
 def compute_semantic_features(survivors: list[Candidate], lookups: dict, n_workers: int) -> None:
     """
-    Computes career_nlp_score, skill_depth_score, domain_score.
+    Computes career_nlp_score (source-weighted), skill_depth_score, domain_score.
     """
     for cand in survivors:
-        # Career NLP score — with temporal decay (recent experience weighted more)
+        # Career NLP score — source-weighted with temporal decay
         prod_weighted = 0.0
         res_weighted = 0.0
+
+        # Source 1: Career descriptions (weight 1.0) + titles (weight 0.85)
         for entry in cand.career_history:
-            desc = entry.description
+            normalized_desc = normalize_text(entry.description)
+            normalized_title = normalize_text(entry.title)
             decay = temporal_decay(entry.years_ago)
-            prod_hits = count_matches(desc, lookups["production_scanner"])
-            res_hits = count_matches(desc, lookups["research_scanner"])
-            prod_weighted += prod_hits * decay
+            prod_hits_desc = count_matches(normalized_desc, lookups["production_scanner"])
+            prod_hits_title = count_matches(normalized_title, lookups["production_scanner"])
+            res_hits = count_matches(normalized_desc, lookups["research_scanner"])
+            prod_weighted += (prod_hits_desc * SOURCE_WEIGHTS["career_descriptions"]
+                            + prod_hits_title * SOURCE_WEIGHTS["current_title"]) * decay
             res_weighted += res_hits * decay
+
+        # Source 2: Headline (weight 0.45)
+        headline_prod = count_matches(normalize_text(cand.headline), lookups["production_scanner"])
+        prod_weighted += headline_prod * SOURCE_WEIGHTS["headline"]
+
+        # Source 3: Summary (weight 0.45)
+        summary_prod = count_matches(normalize_text(cand.summary), lookups["production_scanner"])
+        prod_weighted += summary_prod * SOURCE_WEIGHTS["summary"]
+
         cand.features["career_nlp_score"] = min(1.0, prod_weighted * 0.15 + res_weighted * 0.04)
 
         # Skill depth score

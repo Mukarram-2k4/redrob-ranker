@@ -9,9 +9,55 @@ except ImportError:
 
 from src.config import (
     TIER_A_SKILLS, TIER_B_SKILLS, TIER_C_SKILLS, TIER_D_SKILLS,
-    PRODUCTION_PHRASES, RESEARCH_PHRASES
+    PRODUCTION_PHRASES, RESEARCH_PHRASES,
+    _SYNONYM_PAIRS,
 )
 from src.models import parse_candidate, Candidate
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TEXT NORMALIZATION + SYNONYM EXPANSION
+# ═══════════════════════════════════════════════════════════════════════════
+
+_NORMALIZE_RE = re.compile(r"[-_/]")
+_COLLAPSE_SPACES_RE = re.compile(r"\s+")
+
+
+def normalize_text(text: str) -> str:
+    """
+    Normalize text for consistent matching:
+    1. Lowercase
+    2. Replace hyphens, underscores, slashes with spaces
+    3. Collapse multiple spaces
+    4. Apply synonym expansion (longest-match-first)
+
+    This gives O(1) 'semantic' matching — if a candidate writes 'shipped to
+    AWS instances', our scanner sees 'deployed to cloud deployment'.
+    """
+    if not text:
+        return ""
+    t = text.lower()
+    t = _NORMALIZE_RE.sub(" ", t)
+    t = _COLLAPSE_SPACES_RE.sub(" ", t).strip()
+    # Synonym expansion — longest match first (pre-sorted in config)
+    for synonym, replacement in _SYNONYM_PAIRS:
+        if synonym in t:
+            t = t.replace(synonym, replacement)
+    return t
+
+
+_SKILL_STRIP_RE = re.compile(r"[^a-z0-9+#.]")
+
+
+def normalize_skill_key(name: str) -> str:
+    """
+    Normalize skill name for tier lookups.
+    Lowercase, strip spaces/hyphens/punctuation (preserve +, #, . for C++, C#, Node.js).
+    Maps 'Fine-tuning', 'fine tuning', 'Finetuning' → 'finetuning'.
+    """
+    if not name:
+        return ""
+    return _SKILL_STRIP_RE.sub("", name.lower())
 
 
 def build_lookups() -> dict:
