@@ -12,9 +12,9 @@ primary_contact:
   phone: "+91-7842771037"
 
 team_members:
-  - name: "Syed Khaja Mukarram Ajaz"
-    email: "mukarramajaz01@gmail.com"
-    role: "ML Engineer"
+   name: "Syed Khaja Mukarram Ajaz"
+   email: "mukarramajaz01@gmail.com"
+   role: "Associate Software Engineer"
 
 # ============================================================================
 # Code and reproducibility
@@ -43,8 +43,8 @@ compute:
 # AI tools declaration
 # ============================================================================
 ai_tools_used:
-  - "Claude"    # Used for architecture discussion, code review, pair programming
-  - "Gemini"    # Used via Antigravity coding assistant
+   "Claude" #Used for architecture discussion, code review, pair programming
+   "Gemini" #Used via Antigravity coding assistant"
 
 ai_usage_summary: |
   Used Claude (via Antigravity) as a pair-programming assistant for architecture
@@ -68,9 +68,10 @@ methodology_summary: |
 
   Honeypot-aware ranking: checks 14 honeypot indicators (salary inversion, Young
   Career High YOE, overlapping/impossible tenures, inactive profiles, fixture
-  names, tech time-travel, empty expertise). If honeypot density >8% in top 100,
-  swaps flagged candidates with next-best clean survivors. Offline execution:
-  ~58s runtime on CPU, no network/API calls, no GPU required. Passed 115 E2E tests.
+  names, tech time-travel, empty expertise). Key insight: the JD explicitly warns
+  against ranking by AI keyword count. Our title_relevance multiplier and temporal
+  decay on career NLP directly address this. Offline execution: ~58s runtime on CPU,
+  no network/API calls, no GPU required. Passed 115 E2E tests.
 
 # ============================================================================
 # Declarations

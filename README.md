@@ -57,7 +57,7 @@ streamlit run dashboard.py
 
 The demo dataset (`demo_candidates.jsonl`) contains real top-ranked candidates extracted from the 100K pipeline run — not the organizer's format-validation sample.
 
-**Live Sandbox**: [Streamlit Cloud](https://share.streamlit.io/Mukarram-2k4/redrob-ranker/main/dashboard.py)
+**Live Sandbox**: [Streamlit Cloud](https://robust-hybrid-redrob-ranker.streamlit.app/)
 
 The pipeline runs 9 stages in sequence:
 
