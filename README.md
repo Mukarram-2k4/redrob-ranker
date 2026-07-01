@@ -186,18 +186,19 @@ redrob-ranker/
 ├── submission_metadata.yaml  # Portal metadata (filled)
 ├── README.md                 # This file
 ├── dashboard.py              # Streamlit sandbox dashboard
-├── submission.csv            # Reference output (validated)
-├── LICENSE                   # MIT
-├── .gitignore
 ├── src/
-│   ├── __init__.py
-│   ├── config.py             # All weights, skill tiers, phrase lists, utilities
-│   ├── models.py             # Candidate dataclasses + parse_candidate()
-│   ├── ingest.py             # build_lookups() + load_candidates()
-│   ├── filters.py            # early_eliminate() + honeypot_full_pass()
-│   ├── features.py           # compute_behavioral/tabular/semantic_features()
-│   ├── scorer.py             # compute_scores() with micro-bonuses
-│   └── output.py             # select_top_100() + write_submission_csv()
+│   ├── config.py
+│   ├── models.py
+│   ├── ingest.py
+│   ├── filters.py
+│   ├── features.py
+│   ├── scorer.py
+│   ├── output.py
+│   ├── dimensions.py         # RRF algorithm implementation
+│   └── semantic.py           # TF-IDF scoring layer
+├── eval/                     # Evaluation scripts for NDCG metrics
+│   ├── gold_labeler.py
+│   └── run_eval.py
 └── tests/
     ├── candidate_templates.py
     ├── run_e2e_tests.py
